@@ -1,0 +1,60 @@
+stages:
+  load_data:
+    always_changed: true
+    cmd: python -m src.data_loading.load_data
+    deps:
+      - src/data_loading/load_data.py
+    outs:
+      - data/raw/raw.csv
+
+  preprocess_data:
+    cmd: python -m src.data_preprocessing.preprocess_data
+    deps:
+      - src/data_preprocessing/preprocess_data.py
+      - data/raw/raw.csv
+    outs:
+      - data/preprocessed/train_preprocessed.csv
+      - data/preprocessed/test_preprocessed.csv
+      - artifacts/[features]_mean_imputer.joblib
+    params:
+      - preprocess_data.test_size
+      - preprocess_data.random_seed
+
+  engineer_features:
+    cmd: python -m src.feature_engineering.engineer_features
+    deps:
+      - src/feature_engineering/engineer_features.py
+      - data/preprocessed/train_preprocessed.csv
+      - data/preprocessed/test_preprocessed.csv
+    outs:
+      - data/processed/train_processed.csv
+      - data/processed/test_processed.csv
+      - artifacts/[features]_scaler.joblib
+
+  train:
+    cmd: python -m src.model_training.train_model
+    deps:
+      - src/model_training/train_model.py
+      - data/processed/train_processed.csv
+    outs:
+      - models/model.keras
+      - artifacts/[target]_one_hot_encoder.joblib
+    metrics:
+      - metrics/training.json
+    params:
+      - train.learning_rate
+      - train.hidden_layer_1_neurons
+      - train.hidden_layer_2_neurons
+      - train.dropout_rate
+      - train.epochs
+      - train.batch_size
+
+  evaluate:
+    cmd: python -m src.model_evaluation.evaluate_model
+    deps:
+      - src/model_evaluation/evaluate_model.py
+      - models/model.keras
+      - artifacts/[target]_one_hot_encoder.joblib
+      - data/processed/test_processed.csv
+    metrics:
+      - metrics/evaluation.json
