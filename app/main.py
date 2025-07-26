@@ -3,10 +3,11 @@ import logging
 import os
 
 import joblib
+import mlflow
 import pandas as pd
 from flask import Flask, render_template, request
 from sklearn.datasets import load_breast_cancer
-from tensorflow.keras.models import load_model
+from mlflow.tracking import MlflowClient
 
 logger = logging.getLogger("app.main")
 
@@ -15,32 +16,29 @@ class ModelService:
     def __init__(self) -> None:
         self._load_artifacts()
 
-    def _load_artifacts(self) -> None:
-        """Load all artifacts from the local project folder."""
-        logger.info("Loading artifacts from local project folder")
+    def _load_artifacts(self):
+        """Load the registered model from MLflow Model Registry and related artifacts from its run."""
+        
+        # Load model from registry
+        logger.info("Loading registered model from MLflow Model Registry")
+        self.model = mlflow.keras.load_model("models:/model/latest")
 
-        # Define base paths
-        artifacts_dir = "artifacts"
-        models_dir = "models"
+        # Get run_id from model version metadata
+        client = MlflowClient()
+        run_id = client.get_registered_model("model").latest_versions[0].run_id
 
-        # Define paths to the preprocessing artifacts
-        features_imputer_path = os.path.join(
-            artifacts_dir, "[features]_mean_imputer.joblib"
-        )
-        features_scaler_path = os.path.join(artifacts_dir, "[features]_scaler.joblib")
-        target_encoder_path = os.path.join(
-            artifacts_dir, "[target]_one_hot_encoder.joblib"
-        )
-        # Define path to the model file
-        model_path = os.path.join(models_dir, "model.keras")
+        # Load related artifacts
+        logger.info(f"Loading artifacts from run {run_id}")
+        artifacts_dir = mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path="")
 
-        # Load all required artifacts
-        self.features_imputer = joblib.load(features_imputer_path)
-        self.features_scaler = joblib.load(features_scaler_path)
-        self.target_encoder = joblib.load(target_encoder_path)
-        self.model = load_model(model_path)
-
-        logger.info("Successfully loaded all artifacts")
+        imputer_path = os.path.join(artifacts_dir, "[features]_mean_imputer.joblib")
+        self.features_imputer = joblib.load(imputer_path)
+        scaler_path = os.path.join(artifacts_dir, "[features]_scaler.joblib")
+        self.features_scaler = joblib.load(scaler_path)
+        encoder_path = os.path.join(artifacts_dir, "[target]_one_hot_encoder.joblib")
+        self.target_encoder = joblib.load(encoder_path)
+        
+        logger.info("Successfully loaded model and related artifacts")
 
     def predict(self, features: pd.DataFrame) -> pd.Series:
         """Make predictions using the full pipeline.

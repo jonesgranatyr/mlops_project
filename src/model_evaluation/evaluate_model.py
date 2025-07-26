@@ -1,12 +1,15 @@
 import logging
 import json
+import os
 
 import joblib
+import mlflow
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.preprocessing import LabelEncoder
+
 
 logger = logging.getLogger("src.model_evaluation.evaluate_model")
 
@@ -60,20 +63,40 @@ def evaluate_model(
         X (pd.DataFrame): Test features.
         y_true (pd.Series): True labels.
     """
-    # Generate model predictions
-    y_pred_proba = model.predict(X)
-    y_pred = np.argmax(y_pred_proba, axis=1)
+    # Set up MLflow experiment
+    mlflow.set_experiment("ml_classification")
 
-    # Calculate evaluation metrics
-    report = classification_report(y_true, y_pred, output_dict=True)
-    cm = confusion_matrix(y_true, y_pred).tolist()
-    evaluation = {"classification_report": report, "confusion_matrix": cm}
+    # Get run_id for latest MLflow run
+    runs = mlflow.search_runs(
+        experiment_ids=[os.getenv("MLFLOW_EXPERIMENT_ID")], order_by=["start_time DESC"]
+    )
+    run_id = runs.iloc[0].run_id
 
-    # Log metrics
-    logger.info(f"Classification Report:\n{classification_report(y_true, y_pred)}")
-    evaluation_path = "metrics/evaluation.json"
-    with open(evaluation_path, "w") as f:
-        json.dump(evaluation, f, indent=2)
+    with mlflow.start_run(run_id=run_id):
+        # Generate model predictions
+        y_pred_proba = model.predict(X)
+        y_pred = np.argmax(y_pred_proba, axis=1)
+
+        # Calculate evaluation metrics
+        report = classification_report(y_true, y_pred, output_dict=True)
+        cm = confusion_matrix(y_true, y_pred).tolist()
+        evaluation = {"classification_report": report, "confusion_matrix": cm}
+
+        # Log metrics (DVC)
+        logger.info(f"Classification Report:\n{classification_report(y_true, y_pred)}")
+        evaluation_path = "metrics/evaluation.json"
+        with open(evaluation_path, "w") as f:
+            json.dump(evaluation, f, indent=2)
+
+        # Log metrics (MLflow)
+        mlflow.log_metrics(
+            {
+                "test_accuracy": report["accuracy"],
+                "test_precision_weighted": report["weighted avg"]["precision"],
+                "test_recall_weighted": report["weighted avg"]["recall"],
+                "test_f1_weighted": report["weighted avg"]["f1-score"],
+            }
+        )
 
 
 def main() -> None:

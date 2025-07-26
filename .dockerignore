@@ -12,3 +12,10 @@ metrics/*.json
 
 # DVC
 .dvc
+
+# MLflow
+mlruns
+mlartifacts
+
+# Project
+artifacts/*

@@ -1,4 +1,14 @@
 import logging
+import dagshub
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Initialize DagsHub with credentials
+dagshub.init(
+    repo_owner='dennymarcels',
+    repo_name='mlops_project'
+)
 
 # Configure the logging strategy
 logging.basicConfig(
