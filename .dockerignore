@@ -18,4 +18,5 @@ mlruns
 mlartifacts
 
 # Project
-artifacts/*
+artifacts
+models
